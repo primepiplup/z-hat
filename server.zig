@@ -47,6 +47,7 @@ fn handleEvents(events: usize) !void {
         if(event_count <= 0) { break; }  // handled all events
 
         const poll_in_happened = fds[i].revents == POLL.IN;
+        const poll_hung_up = fds[i].revents & POLL.HUP == POLL.HUP;
 
         if(poll_in_happened) {
             if(i == 0) {
@@ -55,6 +56,8 @@ fn handleEvents(events: usize) !void {
                 try readSocket(i);
             }
             event_count -= 1;
+        } else if(poll_hung_up) {
+            try cleanConnection(i);
         }
     }
 
@@ -140,5 +143,17 @@ fn sendMessages() !void {
         }
         @memset(&msg_buffer[msg_idx], 0);
     }
+    msg_count = 0;
 }
+
+fn cleanConnection(cn_idx: usize) !void {
+    fds[cn_idx] = fds[connection_count];
+    connection_count -= 1;
+
+    try stdout.print("Lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
+
+    clients[cn_idx - 1] = clients[connection_count];
+}
+
+// fn broadcast() !void {} // send a message to all clients, irrespective of the message buffer. Used for server communication to its clients
 
