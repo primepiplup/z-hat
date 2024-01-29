@@ -98,7 +98,7 @@ fn acceptConnection() !void {
     connection_count += 1;
     try stdout.print("Client slot {} out of capacity {}\n", .{connection_count, MAX_CLIENTS});
     fds[connection_count].fd = client_socket;
-    fds[connection_count].events = POLL.IN;
+    fds[connection_count].events = POLL.IN | POLL.HUP;
 
     _ = try std.os.read(client_socket, &client.username);
     try stdout.print("Client username: {s}\n", .{client.username});
@@ -127,9 +127,9 @@ fn readSocket(client_number: usize) !void {
     const msg = msg_buffer[msg_count][(i+2)..];
 
     const code = try std.os.recv(fds[client_number].fd, msg, 0);
-    if(code == 0) { //connection was closed by this client
+    if(code == 0) {
         try stdout.print("Lost connection to client {}, username: {s}\n", .{client_number, username});
-        return; // have to fix the array of client structs because there is now a gap
+        return; 
     }
 
     try stdout.print("{s}: {s}", .{username, msg});
