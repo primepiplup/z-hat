@@ -18,14 +18,14 @@ pub fn main() !void {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
     defer std.os.close(socket);
 
-    const ip_addr = try ip.ipAddr("127.0.0.1");
+    const ip_addr = try ip.ipAddr(config.SERVER_IP);
 
     var pad: [8]u8 = undefined;
     @memset(&pad, 0);
 
     const sock_addr = std.os.linux.sockaddr.in {
         .family = std.os.linux.AF.INET,
-        .port = ip.networkPort(6789),
+        .port = ip.networkPort(config.SERVER_PORT),
         .addr = ip_addr,
         .zero = pad,
     };
