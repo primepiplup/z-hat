@@ -1,3 +1,11 @@
+` ______         _           _`
+`|___  /        | |         | |`
+`   / /_____ ___| |__   __ _| |_`
+`  / /______/ __| '_ \ / _' | __|`
+`./ /___   | (__| | | | (_| | |_`
+`\_____/    \___|_| |_|\__,_|\__|`
+
+
 # Z-hat (Zig chat)
 This chat application provides raw TCP message sending using a server/client model.
 Expected IP address and port are compiled into the program at build.
