@@ -17,7 +17,7 @@ var fds: [1 + MAX_CLIENTS]std.os.pollfd = undefined;
 var connection_count: usize = 0;
 
 var msg_len_buffer: [MAX_CLIENTS]usize = undefined;
-var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE]u8 = undefined;
+var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE:0]u8 = undefined;
 var msg_count: usize = 0;
 
 var discard: [16]u8 = undefined;
@@ -54,6 +54,7 @@ fn cleanSockets(_: c_int) callconv(.C) void {
     for(0..(1 + connection_count)) |i| {
         std.os.close(fds[i].fd);
     }
+    std.process.exit(1);
 }
 
 fn handleEvents(events: usize) !void {
@@ -150,7 +151,7 @@ fn readSocket(client_number: usize) !void {
         return; 
     }
 
-    try stdout.print("{s}", .{msg_buffer[msg_count]});
+    try stdout.print("{s}\n", .{msg_buffer[msg_count]});
     msg_count += 1;
 }
 
@@ -173,6 +174,7 @@ fn cleanConnection(cn_idx: usize) !void {
     try stdout.print("Cleaned lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
 
     try broadcast("User: '{s}' disconnected", .{clients[cn_idx - 1].username});
+    @memset(&clients[cn_idx - 1].username, 0);
 
     clients[cn_idx - 1] = clients[connection_count];
 }
