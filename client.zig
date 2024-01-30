@@ -45,7 +45,9 @@ pub fn main() !void {
     _ = std.os.connect(socket, @ptrCast(&sock_addr), 16) catch { gracefulShutdown("No server could be found", 4); };
     _ = std.os.send(socket, username_buffer[0..username_len], 0) catch { gracefulShutdown("Was unable to send username to server, quitting.", 2); };
 
-    _ = c.waddstr(msgwin, "Connected to server");
+    _ = c.wprintw(msgwin, "Connected to server\n");
+    _ = c.wrefresh(msgwin);
+
     while(true) {
         _ = c.wgetnstr(inputwin, &message_buffer, MAX_MESSAGE_SIZE - 1);
         const msg: [*:0]const u8 = &message_buffer;
@@ -114,8 +116,9 @@ fn readReceived() !void {
 fn displayReceived() !void {
     const received: [*:0]const u8 = &receive_buffer;
     _ = c.wprintw(msgwin, received);
+    _ = c.wprintw(msgwin, "\n");
     @memset(&receive_buffer, 0);
-    _ = c.refresh();
+    _ = c.wrefresh(msgwin);
 }
 
 fn clearMessage(buffer: []u8) void {
