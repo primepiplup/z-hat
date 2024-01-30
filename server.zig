@@ -9,14 +9,18 @@ const POLL = std.os.POLL;
 const MAX_CLIENTS = config.MAX_CLIENTS;
 const MAX_MESSAGE_SIZE = config.MAX_MESSAGE_SIZE;
 const MAX_USERNAME_SIZE = config.MAX_USERNAME_SIZE;
+const USERNAME_MSG_OFFSET = config.USERNAME_MSG_OFFSET;
 
 const stdout = std.io.getStdOut().writer();
 
 var fds: [1 + MAX_CLIENTS]std.os.pollfd = undefined;
 var connection_count: usize = 0;
 
-var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + MAX_MESSAGE_SIZE]u8 = undefined;
+var msg_len_buffer: [MAX_CLIENTS]usize = undefined;
+var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE]u8 = undefined;
 var msg_count: usize = 0;
+
+var discard: [16]u8 = undefined;
 
 const Client = struct {
     username: [MAX_USERNAME_SIZE]u8 = undefined,
@@ -58,6 +62,7 @@ fn handleEvents(events: usize) !void {
             event_count -= 1;
         } else if(poll_hung_up) {
             try cleanConnection(i);
+            event_count -= 1;
         }
     }
 
@@ -114,7 +119,7 @@ fn readSocket(client_number: usize) !void {
     var i: usize = 0;
     while(i < username.len) {
         const c = username[i];
-        if(c != 0) {
+        if(c == 0) {
             break;
         }
         msg_buffer[msg_count][i] = c;
@@ -126,20 +131,23 @@ fn readSocket(client_number: usize) !void {
 
     const msg = msg_buffer[msg_count][(i+2)..];
 
-    const code = try std.os.recv(fds[client_number].fd, msg, 0);
-    if(code == 0) {
-        try stdout.print("Lost connection to client {}, username: {s}\n", .{client_number, username});
+    const msg_len = try std.os.recv(fds[client_number].fd, msg, 0);
+    msg_len_buffer[msg_count] = msg_len;
+    if(msg_len == 0) {
+        try stdout.print("Tried to read message, but lost connection\n", .{});
+        try cleanConnection(client_number);
         return; 
     }
 
-    try stdout.print("{s}: {s}", .{username, msg});
+    try stdout.print("{s}", .{msg_buffer[msg_count]});
     msg_count += 1;
 }
 
 fn sendMessages() !void {
     for(0..msg_count) |msg_idx| {
         for(0..connection_count) |cn_idx| {
-            _ = try std.os.send(fds[cn_idx + 1].fd, &msg_buffer[msg_idx], 0);
+            const msg_slice = msg_buffer[msg_idx][0..(MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + msg_len_buffer[msg_idx] + 1)];
+            _ = try std.os.send(fds[cn_idx + 1].fd, msg_slice, 0);
         }
         @memset(&msg_buffer[msg_idx], 0);
     }
@@ -147,10 +155,11 @@ fn sendMessages() !void {
 }
 
 fn cleanConnection(cn_idx: usize) !void {
+    _ = try std.os.read(fds[cn_idx].fd, &discard);
     fds[cn_idx] = fds[connection_count];
     connection_count -= 1;
 
-    try stdout.print("Lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
+    try stdout.print("Cleaned lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
 
     clients[cn_idx - 1] = clients[connection_count];
 }
