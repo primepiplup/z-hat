@@ -3,6 +3,8 @@ const ip = @import("ip.zig");
 const config = @import("config.zig");
 
 const MAX_USERNAME_SIZE = config.MAX_USERNAME_SIZE;
+const MAX_MESSAGE_SIZE = config.MAX_MESSAGE_SIZE;
+const USERNAME_MSG_OFFSET = config.USERNAME_MSG_OFFSET;
 
 var fds: [2]std.os.pollfd = undefined;
 
@@ -10,6 +12,7 @@ const stdin_file = std.io.getStdIn();
 const stdin = stdin_file.reader();
 const stdout = std.io.getStdOut().writer();
 
+var msg_buffer: [MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE]u8 = undefined;
 
 pub fn main() !void {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
@@ -52,8 +55,9 @@ pub fn main() !void {
             _ = try std.os.send(socket, message[0..(message_len+1)], 0);
             clearMessage(&message, message_len);
         } else if (fds[0].revents == std.os.POLL.IN) {
-            try stdout.print("there's a message that arrived from the server...", .{});
-            // There's a message from the server. Go and print it to the screen!
+            _ = try std.os.recv(fds[0].fd, &msg_buffer, 0);
+            try stdout.print("{s}", .{msg_buffer});
+            @memset(&msg_buffer, 0);
         }
     }
 }
