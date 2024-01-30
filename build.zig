@@ -18,6 +18,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    client.linkLibC();
+    client.linkSystemLibrary("curses");
+
     const server_inst = b.addInstallArtifact(server, .{});
     const client_inst = b.addInstallArtifact(client, .{});
 
