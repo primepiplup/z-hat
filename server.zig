@@ -21,6 +21,7 @@ var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESS
 var msg_count: usize = 0;
 
 var discard: [16]u8 = undefined;
+var broadcast_buffer: [200]u8 = undefined;
 
 const Client = struct {
     username: [MAX_USERNAME_SIZE]u8 = undefined,
@@ -32,6 +33,13 @@ var clients: [MAX_CLIENTS]Client = undefined;
 pub fn main() !void {
     try serverStartListening();
     try acceptConnection();
+    defer cleanSockets(0);
+
+    try std.os.sigaction(std.os.SIG.INT, &std.os.Sigaction{
+        .handler = .{ .handler = cleanSockets },
+        .mask = std.os.empty_sigset,
+        .flags = 0 }
+        , null);
 
     while(std.os.poll(fds[0..(connection_count + 1)], 3000)) |event_count| {
         if(event_count == 0) { continue; }
@@ -39,7 +47,10 @@ pub fn main() !void {
     } else |_| {
         try stdout.print("Encountered an error while polling connections\n", .{});
     }
+}
 
+fn cleanSockets(_: c_int) callconv(.C) void {
+    std.debug.print("Shutting down, clearing sockets.\n", .{});
     for(0..(1 + connection_count)) |i| {
         std.os.close(fds[i].fd);
     }
@@ -161,8 +172,15 @@ fn cleanConnection(cn_idx: usize) !void {
 
     try stdout.print("Cleaned lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
 
+    try broadcast("User: '{s}' disconnected", .{clients[cn_idx - 1].username});
+
     clients[cn_idx - 1] = clients[connection_count];
 }
 
-// fn broadcast() !void {} // send a message to all clients, irrespective of the message buffer. Used for server communication to its clients
+fn broadcast(comptime fmt_str: []const u8, args: anytype) !void {   // send a message to all clients, irrespective of the message buffer. Used for server communication to its clients
+    const brdcst = try std.fmt.bufPrint(&broadcast_buffer, fmt_str, args);
+    for(0..connection_count) |cn_idx| {
+        _ = try std.os.send(fds[cn_idx + 1].fd, brdcst, 0);
+    }
+} 
 
