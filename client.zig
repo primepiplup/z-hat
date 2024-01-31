@@ -3,19 +3,19 @@ const ip = @import("ip.zig");
 const config = @import("config.zig");
 const c = @cImport({ @cInclude("curses.h"); });
 
-const MAX_USERNAME_SIZE = config.MAX_USERNAME_SIZE;
-const MAX_MESSAGE_SIZE = config.MAX_MESSAGE_SIZE;
+const MAX_USERNAME_SIZE   = config.MAX_USERNAME_SIZE;
+const MAX_MESSAGE_SIZE    = config.MAX_MESSAGE_SIZE;
 const USERNAME_MSG_OFFSET = config.USERNAME_MSG_OFFSET;
 
-var fds: [1]std.os.pollfd = undefined;
+var fds: [2]std.os.pollfd = undefined;
 
 const stdin_file = std.io.getStdIn();
-const stdin = stdin_file.reader();
-const stdout = std.io.getStdOut().writer();
+const stdin      = stdin_file.reader();
+const stdout     = std.io.getStdOut().writer();
 
-var receive_buffer: [MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE:0]u8 = undefined;
-var message_buffer: [MAX_MESSAGE_SIZE:0]u8 = undefined;
-var username_buffer: [MAX_USERNAME_SIZE]u8 = undefined;
+var receive_buffer:  [MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE:0]u8 = undefined;
+var message_buffer:  [MAX_MESSAGE_SIZE:0]u8 = undefined;
+var username_buffer: [MAX_USERNAME_SIZE]u8  = undefined;
 
 var stdwin:     ?*c.WINDOW = null;
 var msgwin:     ?*c.WINDOW = null;
@@ -28,8 +28,10 @@ const EXIT: [*:0]const u8 = "/quit";
 pub fn main() !void {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
 
-    fds[0].fd = socket;
+    fds[0].fd     = socket;
     fds[0].events = std.os.POLL.IN;
+    fds[1].fd     = stdin_file.handle;
+    fds[1].events = std.os.POLL.IN;
 
     defer gracefulShutdown("User quit program.", 0);
 
@@ -49,21 +51,18 @@ pub fn main() !void {
     _ = c.wrefresh(msgwin);
 
     while(true) {
-        _ = c.wgetnstr(inputwin, &message_buffer, MAX_MESSAGE_SIZE - 1);
-        const msg: [*:0]const u8 = &message_buffer;
-
-        if(std.mem.orderZ(u8, msg, EXIT).compare(.eq)) { break; }
-        
-        _ = try std.os.send(socket, std.mem.span(msg), 0);
-        clearMessage(&message_buffer);
-
         const event_count = try std.os.poll(&fds, 3000);
-
         if(event_count <= 0) { continue; }
 
         if (fds[0].revents == std.os.POLL.IN) {
             try readReceived();
             try displayReceived();
+        } else if (fds[1].revents == std.os.POLL.IN) {
+            _ = c.wgetnstr(inputwin, &message_buffer, MAX_MESSAGE_SIZE - 1);
+            const msg: [*:0]const u8 = &message_buffer;
+            if(std.mem.orderZ(u8, msg, EXIT).compare(.eq)) { break; }
+            _ = try std.os.send(socket, std.mem.span(msg), 0);
+            clearMessage(&message_buffer);
         }
     }
 }
@@ -76,6 +75,7 @@ fn gracefulShutdown(reason: []const u8, statuscode: u8) void {
     std.debug.print("{s}\n", .{reason});
 
     std.os.close(fds[0].fd);
+    std.os.close(fds[1].fd);
     
     std.process.exit(statuscode);
 }
@@ -90,8 +90,12 @@ fn initScreen() void {
         gracefulShutdown("Terminal too small, quitting.", 3);
     }
     
-    msgwin = c.newwin(height - 4, width - 2, 2, 1);
+    msgwin = c.newwin(height - 3, width - 2, 1, 1);
     inputwin = c.newwin(1, width - 2, height - 1, 1);
+
+    _ = c.scrollok(msgwin,   true);
+    _ = c.scrollok(inputwin, true);
+
     _ = c.refresh();
 }
 
@@ -103,9 +107,9 @@ fn buildSockAddr() !std.os.sockaddr.in {
 
     return std.os.linux.sockaddr.in {
         .family = std.os.linux.AF.INET,
-        .port = ip.networkPort(config.SERVER_PORT),
-        .addr = ip_addr,
-        .zero = pad,
+        .port   = ip.networkPort(config.SERVER_PORT),
+        .addr   = ip_addr,
+        .zero   = pad,
     };
 }
 
@@ -119,6 +123,8 @@ fn displayReceived() !void {
     _ = c.wprintw(msgwin, "\n");
     @memset(&receive_buffer, 0);
     _ = c.wrefresh(msgwin);
+    _ = c.wclear(inputwin);
+    _ = c.wrefresh(inputwin);
 }
 
 fn clearMessage(buffer: []u8) void {
