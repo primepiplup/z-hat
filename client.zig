@@ -29,7 +29,7 @@ pub fn main() !void {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
 
     fds[0].fd     = socket;
-    fds[0].events = std.os.POLL.IN;
+    fds[0].events = std.os.POLL.IN | std.os.POLL.HUP;
     fds[1].fd     = stdin_file.handle;
     fds[1].events = std.os.POLL.IN;
 
@@ -57,6 +57,9 @@ pub fn main() !void {
         if (fds[0].revents == std.os.POLL.IN) {
             try readReceived();
             try displayReceived();
+        } else if (fds[0].revents & std.os.POLL.HUP == std.os.POLL.HUP) {
+            // server disconnect
+            gracefulShutdown("Lost connection to the server - it probably was shut down", 0);
         } else if (fds[1].revents == std.os.POLL.IN) {
             _ = c.wgetnstr(inputwin, &message_buffer, MAX_MESSAGE_SIZE - 1);
             const msg: [*:0]const u8 = &message_buffer;
@@ -114,7 +117,10 @@ fn buildSockAddr() !std.os.sockaddr.in {
 }
 
 fn readReceived() !void {
-    _ = try std.os.recv(fds[0].fd, &receive_buffer, 0);
+    const msg_len = try std.os.recv(fds[0].fd, &receive_buffer, 0);
+    if (msg_len <= 0) {
+        gracefulShutdown("Lost connection to the server - it probably was shut down", 0);
+    }
 }
 
 fn displayReceived() !void {
