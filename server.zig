@@ -177,6 +177,7 @@ fn cleanConnection(cn_idx: usize) !void {
     @memset(&clients[cn_idx - 1].username, 0);
 
     clients[cn_idx - 1] = clients[connection_count];
+    @memset(&clients[connection_count].username, 0);
 }
 
 fn broadcast(comptime fmt_str: []const u8, args: anytype) !void {   // send a message to all clients, irrespective of the message buffer. Used for server communication to its clients
