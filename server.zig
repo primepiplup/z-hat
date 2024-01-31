@@ -4,11 +4,11 @@ const config = @import("config.zig");
 
 const socket_t = std.os.socket_t;
 const sockaddr = std.os.linux.sockaddr;
-const POLL = std.os.POLL;
+const POLL     = std.os.POLL;
 
-const MAX_CLIENTS = config.MAX_CLIENTS;
-const MAX_MESSAGE_SIZE = config.MAX_MESSAGE_SIZE;
-const MAX_USERNAME_SIZE = config.MAX_USERNAME_SIZE;
+const MAX_CLIENTS         = config.MAX_CLIENTS;
+const MAX_MESSAGE_SIZE    = config.MAX_MESSAGE_SIZE;
+const MAX_USERNAME_SIZE   = config.MAX_USERNAME_SIZE;
 const USERNAME_MSG_OFFSET = config.USERNAME_MSG_OFFSET;
 
 const stdout = std.io.getStdOut().writer();
@@ -17,15 +17,15 @@ var fds: [1 + MAX_CLIENTS]std.os.pollfd = undefined;
 var connection_count: usize = 0;
 
 var msg_len_buffer: [MAX_CLIENTS]usize = undefined;
-var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE]u8 = undefined;
+var msg_buffer: [MAX_CLIENTS][MAX_USERNAME_SIZE + USERNAME_MSG_OFFSET + MAX_MESSAGE_SIZE:0]u8 = undefined;
 var msg_count: usize = 0;
 
 var discard: [16]u8 = undefined;
 var broadcast_buffer: [200]u8 = undefined;
 
 const Client = struct {
-    username: [MAX_USERNAME_SIZE]u8 = undefined,
-    connection: sockaddr.in = undefined,
+    username:   [MAX_USERNAME_SIZE:0]u8 = undefined,
+    connection: sockaddr.in           = undefined,
 };
 
 var clients: [MAX_CLIENTS]Client = undefined;
@@ -54,6 +54,7 @@ fn cleanSockets(_: c_int) callconv(.C) void {
     for(0..(1 + connection_count)) |i| {
         std.os.close(fds[i].fd);
     }
+    std.process.exit(1);
 }
 
 fn handleEvents(events: usize) !void {
@@ -122,6 +123,8 @@ fn acceptConnection() !void {
     var ip_buffer: [15]u8 = undefined;
     const client_ip = ip.ipStringFromAddr(&ip_buffer, client.connection.addr);
     try stdout.print("Client IP address: {s}\n\n", .{client_ip});
+
+    try broadcast("server message --- user '{s}' connected", .{@as([*:0]const u8, &client.username)});
 }
 
 fn readSocket(client_number: usize) !void {
@@ -150,7 +153,7 @@ fn readSocket(client_number: usize) !void {
         return; 
     }
 
-    try stdout.print("{s}", .{msg_buffer[msg_count]});
+    try stdout.print("{s}\n", .{msg_buffer[msg_count]});
     msg_count += 1;
 }
 
@@ -172,9 +175,12 @@ fn cleanConnection(cn_idx: usize) !void {
 
     try stdout.print("Cleaned lost connection to client {}, username: {s}\n", .{cn_idx, clients[cn_idx - 1].username});
 
-    try broadcast("User: '{s}' disconnected", .{clients[cn_idx - 1].username});
+    const c_username: [*:0]const u8 = &clients[cn_idx - 1].username;
+    try broadcast("server message --- user '{s}' disconnected", .{c_username});
+    @memset(&clients[cn_idx - 1].username, 0);
 
     clients[cn_idx - 1] = clients[connection_count];
+    @memset(&clients[connection_count].username, 0);
 }
 
 fn broadcast(comptime fmt_str: []const u8, args: anytype) !void {   // send a message to all clients, irrespective of the message buffer. Used for server communication to its clients
