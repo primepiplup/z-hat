@@ -153,8 +153,31 @@ fn readSocket(client_number: usize) !void {
         return; 
     }
 
+    if(msg[0] == '/') {
+        return try handleCommand(msg, client_number);
+    }
+
     try stdout.print("{s}\n", .{msg_buffer[msg_count]});
     msg_count += 1;
+}
+
+fn handleCommand(msg: [*:0]u8, connection_number: usize) !void {
+    const c_command = msg[1..];
+    const command = std.mem.span(c_command);
+    if(std.mem.eql(u8, command, "online")) {
+        try stdout.print("command --- user: '{s}' requests list of online users\n", .{clients[connection_number - 1].username});
+        try sendToConnection(connection_number, "server message --- list of online users\n", .{});
+        for(0..connection_count) |i| {
+            try sendToConnection(connection_number, " - '{s}'\n", .{@as([*:0]const u8, &clients[i].username)});
+        }
+    }
+    @memset(&msg_buffer[msg_count], 0);
+}
+
+fn sendToConnection(connection_number: usize, comptime fmt_str: []const u8, args: anytype) !void {
+    const msg = try std.fmt.bufPrint(&broadcast_buffer, fmt_str, args);
+    _ = try std.os.send(fds[connection_number].fd, msg, 0);
+    @memset(&broadcast_buffer, 0);
 }
 
 fn sendMessages() !void {
