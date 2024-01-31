@@ -94,9 +94,13 @@ fn initScreen() void {
     if(height < 5 or width < 10) {
         gracefulShutdown("Terminal too small, quitting.", 3);
     }
-    
-    msgwin = c.newwin(height - 3, width - 2, 1, 1);
+
+    msgwin = c.newwin(height - 2, width - 2, 1, 1);
     inputwin = c.newwin(1, width - 2, height - 1, 1);
+
+    _ = c.hline('-', width);
+    _ = c.move(height - 2, 0);
+    _ = c.hline('-', width);
 
     _ = c.scrollok(msgwin,   true);
     _ = c.scrollok(inputwin, true);
@@ -133,6 +137,14 @@ fn displayReceived() !void {
     _ = c.wrefresh(msgwin);
     _ = c.wclear(inputwin);
     _ = c.wrefresh(inputwin);
+    drawInputBorder();
+}
+
+fn drawInputBorder() void {
+    _ = c.move(height - 2, 0);
+    _ = c.hline('-', width);
+    _ = c.move(height - 1, 1);
+    _ = c.refresh();
 }
 
 fn clearMessage(buffer: []u8) void {
@@ -164,4 +176,5 @@ fn provideHelp() !void {
     _ = c.wclear(inputwin);
     _ = c.wrefresh(inputwin);
     clearMessage(&message_buffer);
+    drawInputBorder();
 }
