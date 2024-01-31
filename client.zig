@@ -24,6 +24,7 @@ var height: c_int = 0;
 var width:  c_int = 0;
 
 const EXIT: [*:0]const u8 = "/quit";
+const HELP: [*:0]const u8 = "/help";
 
 pub fn main() !void {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
@@ -64,6 +65,7 @@ pub fn main() !void {
             _ = c.wgetnstr(inputwin, &message_buffer, MAX_MESSAGE_SIZE - 1);
             const msg: [*:0]const u8 = &message_buffer;
             if(std.mem.orderZ(u8, msg, EXIT).compare(.eq)) { break; }
+            if(std.mem.orderZ(u8, msg, HELP).compare(.eq)) { try provideHelp(); }
             _ = try std.os.send(socket, std.mem.span(msg), 0);
             clearMessage(&message_buffer);
         }
@@ -152,3 +154,14 @@ fn getInput(buffer: []u8) !usize {
     return res.len;
 }
 
+fn provideHelp() !void {
+    _ = c.wprintw(msgwin, "\n");
+    _ = c.wprintw(msgwin, "Use /quit to quit\n");
+    _ = c.wprintw(msgwin, "Use /online to view the users that are currently online\n");
+    _ = c.wprintw(msgwin, "Use /help to display this message\n");
+    _ = c.wprintw(msgwin, "\n");
+    _ = c.wrefresh(msgwin);
+    _ = c.wclear(inputwin);
+    _ = c.wrefresh(inputwin);
+    clearMessage(&message_buffer);
+}
